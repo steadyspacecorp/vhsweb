@@ -1,6 +1,6 @@
 # vhsweb — VHS for the browser
 
-Write a `.tape` script, get a video. [VHS](https://github.com/charmbracelet/vhs)
+Write a `.tape` script, get a video. The excellent [VHS](https://github.com/charmbracelet/vhs)
 records terminals; **vhsweb** records web pages using the same, user-friendly patterns.
 It drives a real browser with [Playwright](https://playwright.dev) and encodes the session to MP4, GIF, or
 WebM with ffmpeg.
@@ -21,6 +21,8 @@ Sleep 2s
 ```sh
 vhsweb demo.tape   # -> demo.mp4
 ```
+
+https://github.com/user-attachments/assets/8d6b8a6f-2ef1-44da-8a4f-3729aab0d565
 
 ## Installation
 
