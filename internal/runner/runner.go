@@ -164,6 +164,21 @@ func Run(cfg Config, actions []parser.Command) error {
 	return nil
 }
 
+// loadState maps a WaitFor argument to a Playwright load state, or nil if the
+// argument is an ordinary selector.
+func loadState(arg string) *playwright.LoadState {
+	switch strings.ToLower(arg) {
+	case "load":
+		return playwright.LoadStateLoad
+	case "domcontentloaded":
+		return playwright.LoadStateDomcontentloaded
+	case "networkidle":
+		return playwright.LoadStateNetworkidle
+	default:
+		return nil
+	}
+}
+
 // elapsedMs returns milliseconds since the recording started.
 func elapsedMs(start time.Time) int {
 	return int(time.Since(start).Milliseconds())
@@ -216,6 +231,11 @@ func execute(page playwright.Page, cfg Config, cmd parser.Command, start time.Ti
 		return page.Hover(cmd.Args[0])
 
 	case parser.CmdWaitFor:
+		// `WaitFor load|domcontentloaded|networkidle` waits on a navigation
+		// load state; anything else waits for a selector to appear.
+		if state := loadState(cmd.Args[0]); state != nil {
+			return page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{State: state})
+		}
 		_, err := page.WaitForSelector(cmd.Args[0])
 		return err
 
