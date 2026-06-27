@@ -89,15 +89,7 @@ func Run(cfg Config, actions []parser.Command) error {
 	// relative to this moment so sounds line up with the recording.
 	start := time.Now()
 	var events []encoder.SoundEvent
-
-	// Start the pointer at the viewport center rather than the (0,0) corner, so
-	// it isn't parked top-left before the first Click/Hover. It's re-synced here
-	// after each navigation, since a fresh page recreates the cursor overlay.
-	mouse := &mouseState{
-		x: float64(cfg.Width) * cfg.Zoom / 2,
-		y: float64(cfg.Height) * cfg.Zoom / 2,
-	}
-	_ = page.Mouse().Move(mouse.x, mouse.y)
+	mouse := &mouseState{}
 
 	for _, cmd := range actions {
 		if err := execute(page, cfg, cmd, start, &events, mouse); err != nil {
@@ -144,11 +136,6 @@ func execute(page playwright.Page, cfg Config, cmd parser.Command, start time.Ti
 		_, err := page.Goto(cmd.Args[0], playwright.PageGotoOptions{
 			WaitUntil: playwright.WaitUntilStateLoad,
 		})
-		if err == nil {
-			// The new page recreated the cursor overlay at (0,0); put it back
-			// where the pointer logically is so it doesn't flash to the corner.
-			_ = page.Mouse().Move(mouse.x, mouse.y)
-		}
 		return err
 
 	case parser.CmdType:

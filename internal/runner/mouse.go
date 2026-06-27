@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"encoding/json"
 	"math"
 	"time"
 
@@ -26,6 +27,7 @@ const (
 // the pointer there. Returns nil (letting the subsequent action report the
 // error) if the element has no box, e.g. it isn't visible yet.
 func moveMouseToSelector(page playwright.Page, ms *mouseState, selector string) error {
+	syncCursorFromPage(page, ms)
 	loc := page.Locator(selector)
 	if err := loc.ScrollIntoViewIfNeeded(); err != nil {
 		return err
@@ -84,6 +86,27 @@ func moveMouseTo(page playwright.Page, ms *mouseState, x, y float64) error {
 	}
 	ms.x, ms.y = x, y
 	return nil
+}
+
+// syncCursorFromPage reads the on-page cursor's actual position (exposed on
+// window by the overlay script) into ms, so an animation resumes from where the
+// cursor really is — notably the viewport center after a navigation recreated
+// the overlay. A missing value (e.g. mid-navigation) leaves ms unchanged.
+func syncCursorFromPage(page playwright.Page, ms *mouseState) {
+	// Read via JSON so we don't depend on how the client decodes JS numbers.
+	val, err := page.Evaluate("() => JSON.stringify([window.__vhswebCursorX ?? null, window.__vhswebCursorY ?? null])")
+	if err != nil {
+		return
+	}
+	s, ok := val.(string)
+	if !ok {
+		return
+	}
+	var xy []*float64
+	if json.Unmarshal([]byte(s), &xy) != nil || len(xy) != 2 || xy[0] == nil || xy[1] == nil {
+		return
+	}
+	ms.x, ms.y = *xy[0], *xy[1]
 }
 
 // easeInOut is the standard quadratic ease: slow start, fast middle, slow stop.

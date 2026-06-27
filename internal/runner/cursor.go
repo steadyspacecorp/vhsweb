@@ -35,6 +35,7 @@ const cursorScript = `
 
     const cursor = document.createElement('div');
     cursor.setAttribute('data-vhsweb-cursor', '');
+    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
     Object.assign(cursor.style, {
       position: 'fixed',
       top: '0', left: '0',
@@ -44,6 +45,9 @@ const cursorScript = `
       zIndex: '2147483647',
       transition: 'transform 0.05s linear',
       background: 'transparent',
+      // Start at the viewport center so a freshly loaded page (including one
+      // reached by clicking a link) never shows the cursor parked top-left.
+      transform: 'translate(' + cx + 'px, ' + cy + 'px)',
     });
     cursor.innerHTML =
       '<svg width="32" height="32" viewBox="0 0 20 20" fill="none" ' +
@@ -52,10 +56,16 @@ const cursorScript = `
       'fill="black" stroke="white" stroke-width="1.2"/></svg>';
     document.body.appendChild(cursor);
 
-    document.addEventListener('mousemove', (e) => {
-      cursor.style.transform =
-        'translate(' + e.clientX + 'px, ' + e.clientY + 'px)';
-    }, true);
+    // Track the cursor position on window so the recorder can resume an
+    // animation from wherever the cursor actually is — e.g. the center after a
+    // navigation recreated this overlay.
+    const setPos = (x, y) => {
+      window.__vhswebCursorX = x;
+      window.__vhswebCursorY = y;
+      cursor.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+    };
+    setPos(cx, cy);
+    document.addEventListener('mousemove', (e) => setPos(e.clientX, e.clientY), true);
 
     const ripple = (e) => {
       const r = document.createElement('div');
