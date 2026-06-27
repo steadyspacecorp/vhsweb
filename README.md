@@ -22,7 +22,7 @@ Sleep 2s
 vhsweb demo.tape   # -> demo.mp4
 ```
 
-https://github.com/user-attachments/assets/8d6b8a6f-2ef1-44da-8a4f-3729aab0d565
+https://github.com/user-attachments/assets/92d9bd90-884c-42ca-a90c-5cef94289470
 
 ## Installation
 
