@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/steadyspacecorp/vhs-browser/internal/encoder"
-	"github.com/steadyspacecorp/vhs-browser/internal/parser"
+	"github.com/steadyspacecorp/vhsweb/internal/encoder"
+	"github.com/steadyspacecorp/vhsweb/internal/parser"
 	"github.com/playwright-community/playwright-go"
 )
 

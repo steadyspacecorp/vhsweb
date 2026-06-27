@@ -39,7 +39,7 @@ Download the latest prebuilt binary for your OS/arch (macOS and Linux,
 amd64/arm64):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/steadyspacecorp/vhs-browser/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/steadyspacecorp/vhsweb/main/install.sh | sh
 ```
 
 It installs to `~/.local/bin` by default (override with `BIN_DIR=/usr/local/bin`).

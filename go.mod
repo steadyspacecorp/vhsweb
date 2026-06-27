@@ -1,4 +1,4 @@
-module github.com/steadyspacecorp/vhs-browser
+module github.com/steadyspacecorp/vhsweb
 
 go 1.26.4
 

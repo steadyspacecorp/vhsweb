@@ -1,7 +1,7 @@
 #!/bin/sh
 # vhsweb installer — downloads the latest release binary for your OS/arch.
 #
-#   curl -fsSL https://raw.githubusercontent.com/steadyspacecorp/vhs-browser/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/steadyspacecorp/vhsweb/main/install.sh | sh
 #
 # Overrides (env vars):
 #   VERSION=v0.2.0      install a specific tag instead of the latest
@@ -9,7 +9,7 @@
 set -eu
 
 OWNER="steadyspacecorp"
-REPO="vhs-browser"
+REPO="vhsweb"
 BIN="vhsweb"
 BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 
