@@ -76,9 +76,16 @@ The pipeline is **parse → run → encode**, one package each under `internal/`
   GIF is always silent (two-pass palettegen/paletteuse); `LoopOffset` rotates the
   apply pass with `trim`+`concat`.
 
+  - `record.go`: `Record` powers `vhsweb record <url>` — the inverse of the
+    pipeline. It launches a **headed** browser, `ExposeBinding`s a callback and
+    `AddInitScript`s a JS recorder (both context-level, so they survive
+    navigation), collects click/fill/press/scroll events, and `buildTape`
+    serializes them with inferred `Sleep`s. Recording stops on terminal Enter or
+    browser close.
+
 `main.go` is the CLI shell: record a `.tape` (with `-o/--output`, `-q/--quiet`,
-`-p/--preview`, or a piped-in tape), `validate`, `new` (write a starter tape),
-`install` (fetch Chromium), `help`.
+`-p/--preview`, or a piped-in tape), `record` (drive a browser, write a tape),
+`validate`, `new` (write a starter tape), `install` (fetch Chromium), `help`.
 
 ## Conventions & gotchas
 

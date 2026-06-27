@@ -67,6 +67,7 @@ other Playwright tools, so the download happens only once per machine.
 
 ```sh
 vhsweb <file.tape>            # record the session described by the tape file
+vhsweb record <url>           # drive a browser by hand, write a tape from it
 vhsweb validate <file.tape>   # parse-check a tape without recording
 vhsweb new <file.tape>        # write a starter tape file
 vhsweb install                # download the Playwright Chromium browser
@@ -89,6 +90,27 @@ and timing without waiting on the ffmpeg encode. It opens a real window (ignores
 
 The output format is chosen from the `Output` (or `-o`) file extension: `.mp4`,
 `.gif`, or `.webm`.
+
+## Recording a tape by hand
+
+Don't want to hand-write selectors? `vhsweb record` opens a real browser, watches
+what you do, and writes the tape for you:
+
+```sh
+vhsweb record https://example.com -o demo.tape
+# click around, fill fields, scroll… then press Enter in the terminal
+vhsweb demo.tape                 # render it
+```
+
+A Chromium window opens at the URL. As you interact, vhsweb captures clicks,
+field edits, key presses (`Enter`, `Tab`, arrows), and scrolling, inferring
+`Sleep`s from your real timing. Recording stops when you press **Enter** in the
+terminal (or close the window). Omit `-o` to print the tape to stdout.
+
+The generated tape is a starting point — eyeball the selectors before relying on
+it. `#id` and `[data-testid]` selectors are stable; deep `nth-of-type` paths are
+the brittle ones worth tidying by hand. Manual address-bar navigation and hovers
+aren't captured.
 
 ## Tape commands
 
@@ -240,26 +262,15 @@ examples/               sample tape files
 
 ## Roadmap
 
-Things we'd like to build next. None of these exist yet.
+Things we'd like to build next.
 
-### `vhsweb record` — generate a tape by clicking around
+### Better `record` selectors
 
-Like [`vhs record`](https://github.com/charmbracelet/vhs), but for the browser:
-open a real window, drive the page by hand, and have vhsweb write the `.tape` for
-you — `Goto`, `Click`, `Type`, `Press`, `Scroll` — with `Sleep`s inferred from
-your real timing.
-
-```sh
-vhsweb record https://example.com > demo.tape   # planned
-```
-
-The heavy lifting here is producing *stable* selectors (preferring `text=` /
-roles / test-ids over brittle `nth-child` paths). Rather than reinvent that, the
-plan is to lean on Playwright's existing recorder/codegen and translate its
-action stream into tape syntax, then post-process: debounce keystrokes into a
-single `Type`/`Fill`, collapse scrolls, and auto-insert `WaitFor` where the page
-loads. A basic version is small; matching the recorder ergonomics of `vhs` is
-the real work.
+[`vhsweb record`](#recording-a-tape-by-hand) ships today with a best-effort
+selector heuristic. Leaning on Playwright's own recorder/codegen — which prefers
+`text=` / roles / test-ids over brittle `nth-of-type` paths — would make the
+captured tapes far more robust. Capturing hovers, manual navigation, and
+individual keystrokes (as `Type`) would round it out.
 
 ### Frame-exact capture (retina DPR)
 

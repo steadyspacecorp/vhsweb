@@ -65,6 +65,8 @@ func run(args []string) error {
 		return cmdNew(args[1])
 	case "install":
 		return playwright.Install(&playwright.RunOptions{Browsers: []string{"chromium"}})
+	case "record":
+		return cmdRecordSession(args[1:])
 	case "validate":
 		return cmdValidate(args[1:])
 	case "-h", "--help", "help":
@@ -169,6 +171,35 @@ func cmdRecord(path string, outputs []string, quiet, preview bool) error {
 	return nil
 }
 
+// cmdRecordSession drives a real browser and writes a tape from the user's
+// interactions: vhsweb record <url> [-o out.tape].
+func cmdRecordSession(args []string) error {
+	var url, out string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch a {
+		case "-o", "--output":
+			if i+1 >= len(args) {
+				return fmt.Errorf("%s requires a filename", a)
+			}
+			i++
+			out = args[i]
+		default:
+			if a != "-" && strings.HasPrefix(a, "-") {
+				return fmt.Errorf("unknown flag %q", a)
+			}
+			if url != "" {
+				return fmt.Errorf("unexpected argument %q", a)
+			}
+			url = a
+		}
+	}
+	if url == "" {
+		return fmt.Errorf("record requires a URL: vhsweb record https://example.com")
+	}
+	return runner.Record(url, out, 1280, 720)
+}
+
 // cmdValidate parses and config-checks a tape without recording anything.
 func cmdValidate(args []string) error {
 	var path string
@@ -219,6 +250,7 @@ func usage() {
 
 Usage:
   vhsweb <file.tape>            record the session described by the tape file
+  vhsweb record <url>           drive a browser by hand, write a tape (-o file)
   vhsweb validate <file.tape>   parse-check a tape without recording
   vhsweb new <file.tape>        write a starter tape file
   vhsweb install                download the Playwright Chromium browser
