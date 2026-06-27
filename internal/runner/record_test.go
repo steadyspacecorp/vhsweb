@@ -17,6 +17,7 @@ func TestBuildTape(t *testing.T) {
 		{Type: "press", Key: "Enter", T: 3000},                   // 1400ms gap -> Sleep 1400ms
 		{Type: "scroll", Y: 600, T: 3100},
 		{Type: "scroll", Y: 200, T: 3300},
+		{Type: "scroll", Selector: "#panel", Y: 300, T: 3500}, // inner container
 	}
 	got := buildTape("https://example.com", 1280, 720, evs)
 	for _, want := range []string{
@@ -27,6 +28,7 @@ func TestBuildTape(t *testing.T) {
 		"Press Enter",
 		"Scroll Down 600",
 		"Scroll Up 400",
+		`Scroll Down 300 "#panel"`, // delta tracked separately from window
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("tape missing %q\n---\n%s", want, got)
@@ -56,6 +58,54 @@ func TestBuildTapeDropsNoopScrolls(t *testing.T) {
 	}
 	if !strings.Contains(got, "Sleep 3000ms") {
 		t.Errorf("want a single Sleep 3000ms between clicks:\n%s", got)
+	}
+}
+
+// TestScrollSelectorMovesInnerContainer verifies Scroll with a selector wheels
+// the targeted element rather than the page.
+func TestScrollSelectorMovesInnerContainer(t *testing.T) {
+	pw, err := playwright.Run()
+	if err != nil {
+		t.Skipf("playwright unavailable: %v", err)
+	}
+	defer pw.Stop()
+	browser, err := pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{Headless: playwright.Bool(true)})
+	if err != nil {
+		t.Skipf("chromium unavailable: %v", err)
+	}
+	defer browser.Close()
+	page, err := browser.NewPage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := `<div id="box" style="width:300px;height:200px;overflow:auto">` +
+		`<div style="height:3000px">tall</div></div>`
+	if _, err := page.Goto("data:text/html," + html); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := scroll(page, &mouseState{}, []string{"Down", "300", "#box"}); err != nil {
+		t.Fatal(err)
+	}
+	top, err := page.Locator("#box").Evaluate("el => el.scrollTop", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !positive(top) {
+		t.Errorf("inner container scrollTop = %v, want > 0", top)
+	}
+}
+
+// positive reports whether an Evaluate result is a number greater than zero
+// (playwright-go may decode JS numbers as int or float64).
+func positive(v any) bool {
+	switch n := v.(type) {
+	case int:
+		return n > 0
+	case float64:
+		return n > 0
+	default:
+		return false
 	}
 }
 

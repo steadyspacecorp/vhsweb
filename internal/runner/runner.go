@@ -220,7 +220,7 @@ func execute(page playwright.Page, cfg Config, cmd parser.Command, start time.Ti
 		return err
 
 	case parser.CmdScroll:
-		return scroll(page, cmd.Args)
+		return scroll(page, mouse, cmd.Args)
 
 	case parser.CmdScreenshot:
 		_, err := page.Screenshot(playwright.PageScreenshotOptions{
@@ -243,15 +243,27 @@ func execute(page playwright.Page, cfg Config, cmd parser.Command, start time.Ti
 
 // scroll handles `Scroll <Up|Down|Left|Right> <pixels>`, animating the wheel in
 // small steps so the motion reads smoothly in the recording.
-func scroll(page playwright.Page, args []string) error {
+func scroll(page playwright.Page, mouse *mouseState, args []string) error {
 	direction := strings.ToLower(args[0])
+
+	// Args after the direction: an optional pixel count and an optional
+	// selector (Scroll Down 600 "#panel"). Either may be omitted.
 	pixels := 400
-	if len(args) > 1 {
-		n, err := strconv.Atoi(args[1])
-		if err != nil {
-			return fmt.Errorf("scroll amount: %w", err)
+	selector := ""
+	for _, a := range args[1:] {
+		if n, err := strconv.Atoi(a); err == nil {
+			pixels = n
+		} else {
+			selector = a
 		}
-		pixels = n
+	}
+
+	// Position the cursor over the target so the wheel scrolls that element
+	// (its nearest scrollable ancestor) rather than the page.
+	if selector != "" {
+		if err := moveMouseToSelector(page, mouse, selector); err != nil {
+			return err
+		}
 	}
 
 	var dx, dy float64

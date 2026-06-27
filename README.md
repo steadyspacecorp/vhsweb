@@ -164,7 +164,7 @@ Run in order, recorded in real time.
 | `Fill <selector> <value>` | `Fill "#email" "a@b.co"` | Sets a field value instantly |
 | `Press <key>` | `Press Enter` | A keyboard key (`Enter`, `Tab`, `ArrowDown`, ...) |
 | `Hover <selector>` | `Hover ".menu"` | Move the pointer over an element |
-| `Scroll <dir> [px]` | `Scroll Down 600` | `Up` / `Down` / `Left` / `Right`, animated |
+| `Scroll <dir> [px] [selector]` | `Scroll Down 600 "#panel"` | `Up` / `Down` / `Left` / `Right`, animated. With a selector, scrolls that element (hovers it, then wheels) instead of the page |
 | `WaitFor <selector>` | `WaitFor "#results"` | Wait until an element appears |
 | `Sleep <dur>` | `Sleep 1s` | Pause the recording |
 | `Hide` | `Hide` | Stop capturing — actions still run, but their frames are cut |

@@ -63,9 +63,21 @@ const recorderScript = `(() => {
     if (keys.indexOf(e.key) !== -1) send({ type: 'press', key: e.key, t: Date.now() });
   }, true);
   let st;
-  document.addEventListener('scroll', () => {
+  document.addEventListener('scroll', (e) => {
+    const t = e.target;
     clearTimeout(st);
-    st = setTimeout(() => send({ type: 'scroll', y: Math.round(window.scrollY || 0), t: Date.now() }), 200);
+    st = setTimeout(() => {
+      // An element scroll fires on that element; window scroll fires on the
+      // document / <html> / <body>. Record the element selector either way.
+      let selector = '', pos;
+      if (t && t.nodeType === 1 && t !== document.documentElement && t !== document.body) {
+        selector = sel(t);
+        pos = Math.round(t.scrollTop || 0);
+      } else {
+        pos = Math.round(window.scrollY || 0);
+      }
+      send({ type: 'scroll', selector: selector, y: pos, t: Date.now() });
+    }, 200);
   }, true);
 })();`
 
@@ -166,7 +178,7 @@ func buildTape(url string, w, h int, evs []recEvent) string {
 	fmt.Fprintf(&b, "Goto %s\n", url)
 
 	prevT := int64(-1)
-	lastY := 0
+	lastY := map[string]int{} // last scroll position per element ("" = window)
 	for _, e := range collapseFills(evs) {
 		// Decide the action line first; skip events that emit nothing (e.g. a
 		// scroll that didn't move the window) so they leave no orphan Sleep.
@@ -179,15 +191,18 @@ func buildTape(url string, w, h int, evs []recEvent) string {
 		case "press":
 			line = "Press " + e.Key
 		case "scroll":
-			d := e.Y - lastY
-			lastY = e.Y
-			switch {
-			case d > 0:
-				line = fmt.Sprintf("Scroll Down %d", d)
-			case d < 0:
-				line = fmt.Sprintf("Scroll Up %d", -d)
-			default:
+			d := e.Y - lastY[e.Selector]
+			lastY[e.Selector] = e.Y
+			dir := "Down"
+			if d < 0 {
+				dir, d = "Up", -d
+			} else if d == 0 {
 				continue
+			}
+			if e.Selector == "" {
+				line = fmt.Sprintf("Scroll %s %d", dir, d)
+			} else {
+				line = fmt.Sprintf("Scroll %s %d %s", dir, d, quoteArg(e.Selector))
 			}
 		default:
 			continue
