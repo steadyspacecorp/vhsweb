@@ -35,9 +35,11 @@ command -v tar  >/dev/null 2>&1 || err "tar is required"
 # --- resolve version ---
 version="${VERSION:-}"
 if [ -z "$version" ]; then
-  version=$(curl -fsSL "https://api.github.com/repos/$OWNER/$REPO/releases/latest" \
-    | grep '"tag_name":' | head -n1 | sed 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/')
-  [ -n "$version" ] || err "could not determine the latest release; set VERSION=vX.Y.Z"
+  api="https://api.github.com/repos/$OWNER/$REPO/releases/latest"
+  body=$(curl -fsSL "$api" 2>/dev/null) \
+    || err "no published releases found for $OWNER/$REPO yet (the repo may be private, or no version has been tagged). Once a release exists, re-run this; to pin one now: VERSION=vX.Y.Z"
+  version=$(printf '%s' "$body" | grep '"tag_name":' | head -n1 | sed 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/')
+  [ -n "$version" ] || err "could not parse a release tag from $api"
 fi
 # GoReleaser archive names use the version without the leading "v".
 ver_no_v=$(echo "$version" | sed 's/^v//')
