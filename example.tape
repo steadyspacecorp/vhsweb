@@ -12,4 +12,7 @@ Scroll Down 500
 Hover "body > main > section > ul > li:nth-child(1) > a > h2"
 Sleep 250ms
 Click "body > main > section > ul > li:nth-child(1) > a > h2"
-Sleep 3s
+Sleep 1s
+Scroll Down 500
+Sleep 1s
+Scroll Up 500

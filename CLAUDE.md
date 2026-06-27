@@ -82,7 +82,7 @@ tape), `install` (fetch Chromium), `help`.
   broken `go.mod` (wrong module path, won't build). Don't bump it casually.
 - **Durations** accept Go syntax (`500ms`, `2s`) or a bare integer interpreted as
   milliseconds (`parseDuration` in `config.go`).
-- Module path is `github.com/henrypoydar/vhs-web-browser` but the binary/CLI is
+- Module path is `github.com/steadyspacecorp/vhs-browser` but the binary/CLI is
   `vhsweb`.
 - Framerate is resampled by ffmpeg from Playwright's capture rate, not captured
   frame-exact.

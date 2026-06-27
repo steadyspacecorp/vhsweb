@@ -13,8 +13,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/henrypoydar/vhs-web-browser/internal/parser"
-	"github.com/henrypoydar/vhs-web-browser/internal/runner"
+	"github.com/steadyspacecorp/vhs-browser/internal/parser"
+	"github.com/steadyspacecorp/vhs-browser/internal/runner"
 	"github.com/playwright-community/playwright-go"
 )
 

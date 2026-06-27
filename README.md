@@ -31,15 +31,30 @@ You do **not** need Node.js or a separate Playwright install — `vhsweb install
 downloads a self-contained Playwright driver (with its own bundled Node) and the
 Chromium browser for you.
 
+### Install the binary
+
+Download the latest prebuilt binary for your OS/arch (macOS and Linux,
+amd64/arm64):
+
 ```sh
-# 1. Build the binary (until prebuilt releases are published)
+curl -fsSL https://raw.githubusercontent.com/steadyspacecorp/vhs-browser/main/install.sh | sh
+```
+
+It installs to `~/.local/bin` by default (override with `BIN_DIR=/usr/local/bin`).
+Or build from source:
+
+```sh
 go build -o vhsweb .
+```
 
-# 2. One-time: download the Playwright driver + Chromium (~260 MB)
-./vhsweb install
+### First run
 
-# 3. Record
-./vhsweb demo.tape
+```sh
+# One-time: download the Playwright driver + Chromium (~260 MB)
+vhsweb install
+
+# Record
+vhsweb demo.tape
 ```
 
 The driver and browser are cached under `~/Library/Caches/ms-playwright-go`

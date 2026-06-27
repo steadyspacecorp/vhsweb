@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/henrypoydar/vhs-web-browser/internal/parser"
+	"github.com/steadyspacecorp/vhs-browser/internal/parser"
 )
 
 // Config holds recording settings derived from Output and Set commands.

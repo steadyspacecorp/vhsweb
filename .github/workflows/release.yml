@@ -25,9 +25,6 @@ jobs:
           version: "~> v2"
           args: release --clean
         env:
-          # Default token: creates the Release in THIS repo.
+          # Creates the GitHub Release in this repo and uploads the archives
+          # that install.sh downloads.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # PAT with contents:write on henrypoydar/homebrew-tap, so the formula
-          # can be committed to that separate repo. Add it under
-          # Settings → Secrets and variables → Actions.
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
