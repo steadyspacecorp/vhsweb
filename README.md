@@ -67,18 +67,28 @@ other Playwright tools, so the download happens only once per machine.
 
 ```sh
 vhsweb <file.tape>            # record the session described by the tape file
-vhsweb --preview <file.tape>  # watch the run in a real window, record nothing
+vhsweb validate <file.tape>   # parse-check a tape without recording
 vhsweb new <file.tape>        # write a starter tape file
 vhsweb install                # download the Playwright Chromium browser
 vhsweb help                   # show usage
 ```
 
-`--preview` (or `-p`) replays the tape in a visible browser so you can iterate on
-selectors and timing without waiting on the ffmpeg encode. It opens a real
-window (ignores `Set Headless`) and writes no `Output` file.
+Record flags:
 
-The output format is chosen from the `Output` file extension: `.mp4`, `.gif`,
-or `.webm`.
+| Flag | Notes |
+| --- | --- |
+| `-o, --output <file>` | Write to `<file>`, overriding the tape's `Output`. Repeatable — `-o demo.mp4 -o demo.gif` renders both in one run. |
+| `-p, --preview` | Replay the tape in a visible browser, record nothing. |
+| `-q, --quiet` | Suppress status logging. |
+
+A tape can also be piped in: `vhsweb < demo.tape` (or `vhsweb -o demo.gif -`).
+
+`--preview` replays the tape in a visible browser so you can iterate on selectors
+and timing without waiting on the ffmpeg encode. It opens a real window (ignores
+`Set Headless`) and writes no `Output` file.
+
+The output format is chosen from the `Output` (or `-o`) file extension: `.mp4`,
+`.gif`, or `.webm`.
 
 ## Tape commands
 
@@ -99,6 +109,24 @@ at the top of the file.
 | `Set Headless <bool>` | `Set Headless false` | `true` | Show the browser window |
 | `Set Cursor <bool>` | `Set Cursor false` | `true` | Overlay a fake mouse cursor in the video |
 | `Set Sound <bool>` | `Set Sound false` | `true` | Mix click / keystroke sound effects into mp4 / webm audio |
+| `Set Theme <scheme>` | `Set Theme dark` | system | Emulate `prefers-color-scheme`: `dark`, `light`, or `system` |
+| `Set PlaybackSpeed <factor>` | `Set PlaybackSpeed 1.5` | `1` | Speed up (`>1`) or slow down (`<1`) the output |
+| `Set LoopOffset <pct>` | `Set LoopOffset 20%` | `0%` | GIF only: rotate the loop start point forward |
+
+Window dressing (all off by default, so output is edge-to-edge unless set):
+
+| Command | Example | Default | Notes |
+| --- | --- | --- | --- |
+| `Set MarginFill <color>` | `Set MarginFill "#1E1E1E"` | `#FFFFFF` | Color of the mat behind the page and in the rounded-corner reveal (hex or named) |
+| `Set Margin <px>` | `Set Margin 40` | `0` | `MarginFill` mat around the page |
+| `Set Padding <px>` | `Set Padding 20` | `0` | Additional `MarginFill` mat (added to `Margin`) |
+| `Set BorderRadius <px>` | `Set BorderRadius 24` | `0` | Round the page corners. Pair with `Margin`/`Padding` so the rounded corners have a mat to sit on |
+| `Set WindowBar <style>` | `Set WindowBar Colorful` | none | Title bar with traffic-light dots: `Colorful`, `ColorfulRight`, `Rings`, `RingsRight` |
+
+Because a web page fills its window edge-to-edge (unlike a terminal), `Padding`
+and `Margin` both simply add `MarginFill` space around the page — they stack.
+`BorderRadius` rounds the page itself and reveals `MarginFill` in the corners,
+so it only shows when there's a mat (or a contrasting `MarginFill`).
 
 Durations accept Go syntax (`500ms`, `2s`) or a bare integer (milliseconds).
 
@@ -117,9 +145,17 @@ Run in order, recorded in real time.
 | `Scroll <dir> [px]` | `Scroll Down 600` | `Up` / `Down` / `Left` / `Right`, animated |
 | `WaitFor <selector>` | `WaitFor "#results"` | Wait until an element appears |
 | `Sleep <dur>` | `Sleep 1s` | Pause the recording |
+| `Hide` | `Hide` | Stop capturing — actions still run, but their frames are cut |
+| `Show` | `Show` | Resume capturing after a `Hide` |
 | `Screenshot <file>` | `Screenshot shot.png` | Save a still image mid-session |
+| `Source <file.tape>` | `Source setup.tape` | Inline another tape (relative to this file) |
 
 Lines starting with `#` are comments. Quote any argument containing spaces.
+
+`Hide` / `Show` let you run setup steps — logins, navigation — without them
+appearing in the final video: the elapsed time between them is removed and sound
+effects and timings are shifted to match. A `Hide` with no matching `Show` cuts
+everything to the end.
 
 ### Zoom & crispness
 
@@ -201,3 +237,33 @@ examples/               sample tape files
 - Framerate is resampled by ffmpeg from Playwright's capture rate, not captured
   frame-exact. For precise framerate control, a CDP screencast backend would be
   the next step.
+
+## Roadmap
+
+Things we'd like to build next. None of these exist yet.
+
+### `vhsweb record` — generate a tape by clicking around
+
+Like [`vhs record`](https://github.com/charmbracelet/vhs), but for the browser:
+open a real window, drive the page by hand, and have vhsweb write the `.tape` for
+you — `Goto`, `Click`, `Type`, `Press`, `Scroll` — with `Sleep`s inferred from
+your real timing.
+
+```sh
+vhsweb record https://example.com > demo.tape   # planned
+```
+
+The heavy lifting here is producing *stable* selectors (preferring `text=` /
+roles / test-ids over brittle `nth-child` paths). Rather than reinvent that, the
+plan is to lean on Playwright's existing recorder/codegen and translate its
+action stream into tape syntax, then post-process: debounce keystrokes into a
+single `Type`/`Fill`, collapse scrolls, and auto-insert `WaitFor` where the page
+loads. A basic version is small; matching the recorder ergonomics of `vhs` is
+the real work.
+
+### Frame-exact capture (retina DPR)
+
+A Chrome DevTools Protocol screencast backend would give frame-exact framerate
+and true device-pixel-ratio capture, replacing today's `Set Zoom` magnify trick
+(which rasterizes crisply but evaluates CSS breakpoints against the larger
+width). See [Limitations](#limitations).

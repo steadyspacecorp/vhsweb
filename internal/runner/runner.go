@@ -52,6 +52,12 @@ func Run(cfg Config, actions []parser.Command) error {
 		Height: int(float64(cfg.Height) * cfg.Zoom),
 	}
 	ctxOpts := playwright.BrowserNewContextOptions{Viewport: size}
+	switch cfg.ColorScheme {
+	case "dark":
+		ctxOpts.ColorScheme = playwright.ColorSchemeDark
+	case "light":
+		ctxOpts.ColorScheme = playwright.ColorSchemeLight
+	}
 	if !cfg.Preview {
 		ctxOpts.RecordVideo = &playwright.RecordVideo{
 			Dir:  playwright.String(videoDir),
@@ -89,14 +95,33 @@ func Run(cfg Config, actions []parser.Command) error {
 	// relative to this moment so sounds line up with the recording.
 	start := time.Now()
 	var events []encoder.SoundEvent
+	var cuts []encoder.Cut
+	hideAt := -1
 	mouse := &mouseState{}
 
 	for _, cmd := range actions {
+		switch cmd.Type {
+		case parser.CmdHide:
+			if hideAt < 0 {
+				hideAt = elapsedMs(start)
+			}
+			continue
+		case parser.CmdShow:
+			if hideAt >= 0 {
+				cuts = append(cuts, encoder.Cut{StartMs: hideAt, EndMs: elapsedMs(start)})
+				hideAt = -1
+			}
+			continue
+		}
 		if err := execute(page, cfg, cmd, start, &events, mouse); err != nil {
 			// Tear down the recording before reporting the failure.
 			_ = browserCtx.Close()
 			return fmt.Errorf("line %d: %s: %w", cmd.Line, cmd.Type, err)
 		}
+	}
+	// A Hide with no matching Show drops everything to the end of capture.
+	if hideAt >= 0 {
+		cuts = append(cuts, encoder.Cut{StartMs: hideAt, EndMs: elapsedMs(start)})
 	}
 
 	if cfg.Preview {
@@ -117,8 +142,24 @@ func Run(cfg Config, actions []parser.Command) error {
 	if !cfg.Sound {
 		events = nil
 	}
-	if err := encoder.Encode(rawPath, cfg.Output, cfg.Framerate, events); err != nil {
-		return fmt.Errorf("encoding output: %w", err)
+	opts := encoder.Options{
+		Framerate:  cfg.Framerate,
+		Events:     events,
+		Speed:      cfg.PlaybackSpeed,
+		LoopOffset: cfg.LoopOffset,
+		Cuts:       cuts,
+		Frame: encoder.Frame{
+			Padding:      cfg.Padding,
+			Margin:       cfg.Margin,
+			MarginFill:   cfg.MarginFill,
+			WindowBar:    cfg.WindowBar,
+			BorderRadius: cfg.BorderRadius,
+		},
+	}
+	for _, dst := range cfg.outputs() {
+		if err := encoder.Encode(rawPath, dst, opts); err != nil {
+			return fmt.Errorf("encoding %s: %w", dst, err)
+		}
 	}
 	return nil
 }

@@ -3,14 +3,18 @@
 // Usage:
 //
 //	vhsweb example.tape            record the session described by example.tape
+//	vhsweb -o out.gif example.tape override the tape's Output (repeatable)
 //	vhsweb --preview example.tape  watch the run in a real window, record nothing
+//	vhsweb validate example.tape   parse-check a tape without recording
 //	vhsweb new example.tape        write a starter .tape file
 //	vhsweb install                 download the Playwright browser binaries
 package main
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/steadyspacecorp/vhsweb/internal/parser"
@@ -61,6 +65,8 @@ func run(args []string) error {
 		return cmdNew(args[1])
 	case "install":
 		return playwright.Install(&playwright.RunOptions{Browsers: []string{"chromium"}})
+	case "validate":
+		return cmdValidate(args[1:])
 	case "-h", "--help", "help":
 		usage()
 		return nil
@@ -71,13 +77,24 @@ func run(args []string) error {
 
 	// Otherwise: record (or, with --preview, just watch) a tape file.
 	preview := false
+	quiet := false
+	var outputs []string
 	var path string
-	for _, a := range args {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		switch a {
 		case "--preview", "-p":
 			preview = true
+		case "--quiet", "-q":
+			quiet = true
+		case "--output", "-o":
+			if i+1 >= len(args) {
+				return fmt.Errorf("%s requires a filename", a)
+			}
+			i++
+			outputs = append(outputs, args[i])
 		default:
-			if strings.HasPrefix(a, "-") {
+			if a != "-" && strings.HasPrefix(a, "-") {
 				return fmt.Errorf("unknown flag %q", a)
 			}
 			if path != "" {
@@ -86,10 +103,24 @@ func run(args []string) error {
 			path = a
 		}
 	}
-	if path == "" {
-		return fmt.Errorf("no tape file given (try: vhsweb help)")
+	return cmdRecord(path, outputs, quiet, preview)
+}
+
+// openTape returns a reader for the tape at path, a display name, and the base
+// directory for resolving relative Source includes. An empty path (or "-")
+// reads from stdin when input is piped in (Source then resolves against cwd).
+func openTape(path string) (io.ReadCloser, string, string, error) {
+	if path == "" || path == "-" {
+		if fi, err := os.Stdin.Stat(); err == nil && fi.Mode()&os.ModeCharDevice == 0 {
+			return os.Stdin, "<stdin>", "", nil
+		}
+		return nil, "", "", fmt.Errorf("no tape file given (try: vhsweb help)")
 	}
-	return cmdRecord(path, preview)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return f, path, filepath.Dir(path), nil
 }
 
 func cmdNew(path string) error {
@@ -103,38 +134,84 @@ func cmdNew(path string) error {
 	return nil
 }
 
-func cmdRecord(path string, preview bool) error {
-	f, err := os.Open(path)
+func cmdRecord(path string, outputs []string, quiet, preview bool) error {
+	r, name, baseDir, err := openTape(path)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer r.Close()
 
-	cmds, err := parser.Parse(f)
+	cfg, actions, err := loadTape(r, name, baseDir)
 	if err != nil {
 		return err
 	}
-
-	cfg, actions, err := runner.BuildConfig(cmds)
-	if err != nil {
-		return err
-	}
+	cfg.Outputs = outputs
 
 	if preview {
 		// Watch the run in a real window; record and encode nothing.
 		cfg.Preview = true
 		cfg.Headless = false
 		cfg.Sound = false
-		fmt.Printf("Previewing %s (%dx%d, no recording)\n", path, cfg.Width, cfg.Height)
+		logf(quiet, "Previewing %s (%dx%d, no recording)\n", name, cfg.Width, cfg.Height)
 		return runner.Run(cfg, actions)
 	}
 
-	fmt.Printf("Recording %s -> %s (%dx%d)\n", path, cfg.Output, cfg.Width, cfg.Height)
+	for _, dst := range cfg.Outputs {
+		logf(quiet, "Recording %s -> %s (%dx%d)\n", name, dst, cfg.Width, cfg.Height)
+	}
+	if len(cfg.Outputs) == 0 {
+		logf(quiet, "Recording %s -> %s (%dx%d)\n", name, cfg.Output, cfg.Width, cfg.Height)
+	}
 	if err := runner.Run(cfg, actions); err != nil {
 		return err
 	}
-	fmt.Printf("Wrote %s\n", cfg.Output)
+	logf(quiet, "Done\n")
 	return nil
+}
+
+// cmdValidate parses and config-checks a tape without recording anything.
+func cmdValidate(args []string) error {
+	var path string
+	for _, a := range args {
+		if a != "-" && strings.HasPrefix(a, "-") {
+			return fmt.Errorf("unknown flag %q", a)
+		}
+		if path != "" {
+			return fmt.Errorf("unexpected argument %q", a)
+		}
+		path = a
+	}
+	r, name, baseDir, err := openTape(path)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	if _, _, err := loadTape(r, name, baseDir); err != nil {
+		return err
+	}
+	fmt.Printf("%s: ok\n", name)
+	return nil
+}
+
+// loadTape parses a tape reader into a runner Config and the ordered actions.
+func loadTape(r io.Reader, name, baseDir string) (runner.Config, []parser.Command, error) {
+	cmds, err := parser.ParseWithBase(r, baseDir)
+	if err != nil {
+		return runner.Config{}, nil, fmt.Errorf("%s: %w", name, err)
+	}
+	cfg, actions, err := runner.BuildConfig(cmds)
+	if err != nil {
+		return runner.Config{}, nil, fmt.Errorf("%s: %w", name, err)
+	}
+	return cfg, actions, nil
+}
+
+// logf prints a status line unless quiet is set.
+func logf(quiet bool, format string, a ...any) {
+	if !quiet {
+		fmt.Printf(format, a...)
+	}
 }
 
 func usage() {
@@ -142,10 +219,18 @@ func usage() {
 
 Usage:
   vhsweb <file.tape>            record the session described by the tape file
-  vhsweb --preview <file.tape>  watch the run in a real window, record nothing
+  vhsweb validate <file.tape>   parse-check a tape without recording
   vhsweb new <file.tape>        write a starter tape file
   vhsweb install                download the Playwright Chromium browser
   vhsweb version                print the version
   vhsweb help                   show this message
+
+Flags (record):
+  -o, --output <file>   write to <file>, overriding the tape's Output
+                        (repeatable: -o demo.mp4 -o demo.gif)
+  -p, --preview         watch the run in a real window, record nothing
+  -q, --quiet           suppress status logging
+
+A tape may also be piped in:  vhsweb < demo.tape
 `)
 }

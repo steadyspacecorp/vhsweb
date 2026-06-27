@@ -11,7 +11,8 @@ import (
 
 // Config holds recording settings derived from Output and Set commands.
 type Config struct {
-	Output      string        // output file path (.mp4, .gif, or .webm)
+	Output      string        // output file path from the tape's Output command
+	Outputs     []string      // CLI -o overrides; when non-empty, replaces Output
 	Width       int           // logical viewport width
 	Height      int           // logical viewport height
 	Zoom        float64       // device pixel ratio; video is captured at Width*Zoom x Height*Zoom
@@ -22,6 +23,17 @@ type Config struct {
 	ShowCursor  bool          // overlay a fake mouse cursor in the video
 	Sound       bool          // mix click/keystroke sound effects into the audio track
 	Preview     bool          // watch the run in a real window; skip recording/encoding
+
+	PlaybackSpeed float64 // output playback speed multiplier (1 = realtime)
+	LoopOffset    float64 // GIF only: fraction 0..1 to rotate the loop start by
+
+	Padding      int    // inner mat between page content and the window edge, px
+	Margin       int    // space around the window, px
+	MarginFill   string // color filling the margin / padding / rounded corners
+	WindowBar    string // title-bar style ("" = none; e.g. Colorful, Rings)
+	BorderRadius int    // window corner radius, px
+
+	ColorScheme string // emulated prefers-color-scheme: "dark" / "light" / "" = system default
 }
 
 // DefaultConfig returns the baseline settings before any Set commands apply.
@@ -37,7 +49,19 @@ func DefaultConfig() Config {
 		Headless:    true,
 		ShowCursor:  true,
 		Sound:       true,
+
+		PlaybackSpeed: 1,
+		MarginFill:    "#FFFFFF",
 	}
+}
+
+// outputs returns the destinations to encode: the CLI -o overrides if any were
+// given, otherwise the single Output from the tape.
+func (c Config) outputs() []string {
+	if len(c.Outputs) > 0 {
+		return c.Outputs
+	}
+	return []string{c.Output}
 }
 
 // applySet mutates the config from a `Set <key> <value>` command.
@@ -100,10 +124,96 @@ func (c *Config) applySet(key, value string) error {
 			return fmt.Errorf("Set Sound: %w", err)
 		}
 		c.Sound = b
+	case "playbackspeed", "speed":
+		f, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return fmt.Errorf("Set PlaybackSpeed: %w", err)
+		}
+		if f <= 0 {
+			return fmt.Errorf("Set PlaybackSpeed: must be > 0")
+		}
+		c.PlaybackSpeed = f
+	case "loopoffset":
+		f, err := parseFraction(value)
+		if err != nil {
+			return fmt.Errorf("Set LoopOffset: %w", err)
+		}
+		c.LoopOffset = f
+	case "padding":
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 0 {
+			return fmt.Errorf("Set Padding: want a non-negative integer, got %q", value)
+		}
+		c.Padding = n
+	case "margin":
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 0 {
+			return fmt.Errorf("Set Margin: want a non-negative integer, got %q", value)
+		}
+		c.Margin = n
+	case "marginfill":
+		c.MarginFill = value
+	case "windowbar":
+		if !validWindowBar(value) {
+			return fmt.Errorf("Set WindowBar: unknown style %q (try Colorful, ColorfulRight, Rings, RingsRight)", value)
+		}
+		c.WindowBar = value
+	case "borderradius", "radius":
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 0 {
+			return fmt.Errorf("Set BorderRadius: want a non-negative integer, got %q", value)
+		}
+		c.BorderRadius = n
+	case "theme", "colorscheme", "darkmode":
+		switch strings.ToLower(value) {
+		case "dark", "light":
+			c.ColorScheme = strings.ToLower(value)
+		case "system", "auto", "":
+			c.ColorScheme = ""
+		default:
+			return fmt.Errorf("Set Theme: want dark, light, or system, got %q", value)
+		}
 	default:
 		return fmt.Errorf("unknown Set key %q", key)
 	}
 	return nil
+}
+
+// validWindowBar reports whether s names a supported window-bar style.
+func validWindowBar(s string) bool {
+	switch s {
+	case "", "Colorful", "ColorfulRight", "Rings", "RingsRight":
+		return true
+	}
+	return false
+}
+
+// parseFraction accepts a percentage ("20%") or a 0..1 float and returns the
+// fraction, clamped to [0,1).
+func parseFraction(s string) (float64, error) {
+	s = strings.TrimSpace(s)
+	if strings.HasSuffix(s, "%") {
+		p, err := strconv.ParseFloat(strings.TrimSuffix(s, "%"), 64)
+		if err != nil {
+			return 0, err
+		}
+		return clampFraction(p / 100), nil
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, err
+	}
+	return clampFraction(f), nil
+}
+
+func clampFraction(f float64) float64 {
+	if f < 0 {
+		return 0
+	}
+	if f >= 1 {
+		return 0.999
+	}
+	return f
 }
 
 // BuildConfig extracts Output/Set commands into a Config and returns the

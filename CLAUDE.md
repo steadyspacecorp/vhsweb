@@ -42,15 +42,18 @@ The pipeline is **parse → run → encode**, one package each under `internal/`
   VHS-like: one keyword + space-separated args per line, with a quote-aware
   tokenizer (`"..."` / `'...'` collapse to one arg). Keywords and their minimum
   arity live in `commandArity`; adding a command means adding a `CommandType`
-  const and an arity entry here.
+  const and an arity entry here. `Source <file>` is expanded inline at parse
+  time (`ParseWithBase`/`ParseFile` carry a base dir; a `seen` set breaks cycles).
 - `internal/runner` — the execution core.
   - `config.go`: `Config` + `DefaultConfig`. `BuildConfig` splits parsed commands
     into recording settings (`Output`, `Set`) vs. ordered action commands. `Set`
     keys are handled in `applySet` (several accept aliases, e.g. `zoom`/`scale`).
   - `runner.go`: `Run` launches Chromium with video recording on, replays each
-    action via `execute`, then hands the raw WebM to the encoder. Click/keystroke
-    timestamps are collected into `[]encoder.SoundEvent` relative to page-create
-    time so sounds line up with the video.
+    action via `execute`, then hands the raw WebM to the encoder as an
+    `encoder.Options`. Click/keystroke timestamps are collected into
+    `[]encoder.SoundEvent` relative to page-create time so sounds line up with
+    the video. `Hide`/`Show` are intercepted in the `Run` loop (not `execute`)
+    to record `encoder.Cut` spans by elapsed time.
   - `cursor.go`: JS injected as Playwright **init scripts** (survive navigations)
     — `zoomScript` (CSS `zoom` on `<html>`) and `cursorScript` (fake cursor +
     click ripple overlay reacting to native pointer events).
@@ -59,16 +62,23 @@ The pipeline is **parse → run → encode**, one package each under `internal/`
     from the tracked `mouseState` to the element center over many `Mouse().Move`
     steps with an ease-in-out curve and a slight arc, so the on-page cursor moves
     realistically. Travel time scales with distance.
-- `internal/encoder` — `Encode` picks ffmpeg settings from the output extension.
-  Sound uses **bundled `.mp3` samples** embedded via `//go:embed` from
-  `assets/` (four click + four key variants, from vercel-labs/webreel, Apache-2.0
-  — see `assets/CREDITS.md`). `buildSoundMix` adds one sample input per event,
-  `adelay`s each to its timestamp, and `amix`es them onto a silent base track;
-  variants cycle per kind and `tickVolume` jitters the level so repeats differ.
-  GIF is always silent (two-pass palettegen/paletteuse).
+- `internal/encoder` — `Encode(src, dst, Options)` picks ffmpeg settings from the
+  output extension. `buildVideoChain` assembles one linear filter chain shared by
+  every path (silent / sound / gif): drop `Hide`/`Show` cuts (`select` +
+  `setpts`), apply `PlaybackSpeed`, dress the frame (`frameFilters`: rgb working
+  format, padding/margin `pad`s, a window bar of `drawbox` dots, and `geq`
+  corner-fill rounding — all filled with `MarginFill` so rounded corners reveal
+  it), then even-scale last. `timeline` re-maps sound events onto the cut/sped-up
+  output timeline. Sound uses **bundled `.mp3` samples** embedded via `//go:embed`
+  from `assets/` (four click + four key variants, from vercel-labs/webreel,
+  Apache-2.0 — see `assets/CREDITS.md`); `buildSoundMix` prepends the shared video
+  chain, then `adelay`s one sample per event and `amix`es them onto a silent base.
+  GIF is always silent (two-pass palettegen/paletteuse); `LoopOffset` rotates the
+  apply pass with `trim`+`concat`.
 
-`main.go` is the CLI shell: `run` (record a `.tape`), `new` (write a starter
-tape), `install` (fetch Chromium), `help`.
+`main.go` is the CLI shell: record a `.tape` (with `-o/--output`, `-q/--quiet`,
+`-p/--preview`, or a piped-in tape), `validate`, `new` (write a starter tape),
+`install` (fetch Chromium), `help`.
 
 ## Conventions & gotchas
 
