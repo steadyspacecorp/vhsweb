@@ -37,6 +37,28 @@ func TestBuildTape(t *testing.T) {
 	}
 }
 
+func TestBuildTapeDropsNoopScrolls(t *testing.T) {
+	// Scrolls that don't move the window (common on SPAs with inner scroll
+	// containers) must not leave orphan Sleep lines.
+	evs := []recEvent{
+		{Type: "click", Selector: "#a", T: 1000},
+		{Type: "scroll", Y: 0, T: 2000}, // no movement
+		{Type: "scroll", Y: 0, T: 3000}, // no movement
+		{Type: "click", Selector: "#b", T: 4000},
+	}
+	got := buildTape("https://example.com", 1280, 720, evs)
+	if strings.Contains(got, "Scroll") {
+		t.Errorf("zero-delta scroll produced a Scroll line:\n%s", got)
+	}
+	// Exactly one Sleep, covering the full 3s gap between the two clicks.
+	if n := strings.Count(got, "Sleep"); n != 1 {
+		t.Errorf("got %d Sleep lines, want 1:\n%s", n, got)
+	}
+	if !strings.Contains(got, "Sleep 3000ms") {
+		t.Errorf("want a single Sleep 3000ms between clicks:\n%s", got)
+	}
+}
+
 // TestRecorderCapturesInteractions drives a page programmatically to confirm
 // the injected recorder + binding actually capture clicks, fills, and presses.
 func TestRecorderCapturesInteractions(t *testing.T) {

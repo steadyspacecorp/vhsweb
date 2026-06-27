@@ -165,32 +165,43 @@ func buildTape(url string, w, h int, evs []recEvent) string {
 	fmt.Fprintf(&b, "Set Height %d\n\n", h)
 	fmt.Fprintf(&b, "Goto %s\n", url)
 
-	var prevT int64
+	prevT := int64(-1)
 	lastY := 0
-	for i, e := range collapseFills(evs) {
-		if i == 0 {
-			prevT = e.T
-		}
-		if gap := e.T - prevT; gap >= 200 {
-			fmt.Fprintf(&b, "Sleep %dms\n", roundTo(gap, 100))
-		}
-		prevT = e.T
-
+	for _, e := range collapseFills(evs) {
+		// Decide the action line first; skip events that emit nothing (e.g. a
+		// scroll that didn't move the window) so they leave no orphan Sleep.
+		var line string
 		switch e.Type {
 		case "click":
-			fmt.Fprintf(&b, "Click %s\n", quoteArg(e.Selector))
+			line = "Click " + quoteArg(e.Selector)
 		case "fill":
-			fmt.Fprintf(&b, "Fill %s %s\n", quoteArg(e.Selector), quoteArg(e.Value))
+			line = "Fill " + quoteArg(e.Selector) + " " + quoteArg(e.Value)
 		case "press":
-			fmt.Fprintf(&b, "Press %s\n", e.Key)
+			line = "Press " + e.Key
 		case "scroll":
-			if d := e.Y - lastY; d > 0 {
-				fmt.Fprintf(&b, "Scroll Down %d\n", d)
-			} else if d < 0 {
-				fmt.Fprintf(&b, "Scroll Up %d\n", -d)
-			}
+			d := e.Y - lastY
 			lastY = e.Y
+			switch {
+			case d > 0:
+				line = fmt.Sprintf("Scroll Down %d", d)
+			case d < 0:
+				line = fmt.Sprintf("Scroll Up %d", -d)
+			default:
+				continue
+			}
+		default:
+			continue
 		}
+
+		// Sleep covers the real gap since the last emitted action (so time spent
+		// on skipped events folds into the next pause).
+		if prevT >= 0 {
+			if gap := e.T - prevT; gap >= 200 {
+				fmt.Fprintf(&b, "Sleep %dms\n", roundTo(gap, 100))
+			}
+		}
+		fmt.Fprintf(&b, "%s\n", line)
+		prevT = e.T
 	}
 	return b.String()
 }
