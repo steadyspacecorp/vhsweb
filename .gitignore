@@ -1,0 +1,28 @@
+# Built binary
+/vhsweb
+
+# GoReleaser output
+/dist/
+
+# Recorded outputs
+*.mp4
+*.gif
+*.webm
+# ...but keep example tapes
+!examples/
+
+# Local screenshots
+*.png
+
+# Go
+*.test
+*.out
+/coverage.out
+
+# macOS
+.DS_Store
+
+# Editor / local
+.idea/
+.vscode/
+*.swp

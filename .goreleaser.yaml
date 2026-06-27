@@ -1,0 +1,61 @@
+# GoReleaser config — cross-compiles vhsweb and publishes a Homebrew formula.
+# Local dry run:  goreleaser release --snapshot --clean
+# Real release:   git tag v0.1.0 && git push origin v0.1.0  (CI runs goreleaser)
+version: 2
+
+project_name: vhsweb
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: vhsweb
+    main: .
+    binary: vhsweb
+    env:
+      - CGO_ENABLED=0 # pure Go; lets us cross-compile freely
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: vhsweb
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+brews:
+  - name: vhsweb
+    # The tap repo this formula is committed to: github.com/henrypoydar/homebrew-tap
+    repository:
+      owner: henrypoydar
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/henrypoydar/vhs-web-browser"
+    description: "VHS for the browser — script a web page, get a video"
+    license: "MIT"
+    # ffmpeg/ffprobe are required at runtime for transcoding and sound mixing.
+    dependencies:
+      - name: ffmpeg
+    caveats: |
+      vhsweb drives a real Chromium via Playwright, downloaded on first use.
+      Run this once after installing:
+        vhsweb install
+    test: |
+      system "#{bin}/vhsweb", "version"
