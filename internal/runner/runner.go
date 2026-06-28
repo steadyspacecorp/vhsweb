@@ -42,39 +42,37 @@ func Run(cfg Config, actions []parser.Command) error {
 		return fmt.Errorf("launching chromium: %w", err)
 	}
 
-	// RecordVideo writes frames at the viewport's pixel size, so to get a crisp
-	// Zoom-times-larger video we size the viewport up to the target resolution
-	// and magnify the page content by the same factor (see zoomScript). The
-	// browser rasterizes text/vectors at the final pixel size, so the result is
-	// genuinely sharp rather than upscaled.
-	size := &playwright.Size{
-		Width:  int(float64(cfg.Width) * cfg.Zoom),
-		Height: int(float64(cfg.Height) * cfg.Zoom),
+	// Zoom maps to deviceScaleFactor (true DPR): the viewport stays the logical
+	// page size (so CSS media queries see the real width), the browser renders
+	// at Width*Zoom device pixels, and RecordVideo downsamples that to the
+	// logical size — supersampled, anti-aliased text with undistorted layout.
+	// RecordVideo can't exceed the CSS viewport (a larger Size just gray-pads),
+	// so output resolution is the logical Width x Height regardless of Zoom.
+	viewport := &playwright.Size{Width: cfg.Width, Height: cfg.Height}
+	devW := int(float64(cfg.Width) * cfg.Zoom)
+	devH := int(float64(cfg.Height) * cfg.Zoom)
+	ctxOpts := playwright.BrowserNewContextOptions{Viewport: viewport}
+	if cfg.Zoom != 1 {
+		ctxOpts.DeviceScaleFactor = playwright.Float(cfg.Zoom)
 	}
-	ctxOpts := playwright.BrowserNewContextOptions{Viewport: size}
 	switch cfg.ColorScheme {
 	case "dark":
 		ctxOpts.ColorScheme = playwright.ColorSchemeDark
 	case "light":
 		ctxOpts.ColorScheme = playwright.ColorSchemeLight
 	}
-	if !cfg.Preview {
+	// The screencast path (default) captures lossless frames at device-pixel
+	// resolution via CDP. RecordVideo is the fallback and caps at the CSS
+	// viewport, so it records at the logical size.
+	if !cfg.Preview && cfg.Capture == "record" {
 		ctxOpts.RecordVideo = &playwright.RecordVideo{
 			Dir:  playwright.String(videoDir),
-			Size: size,
+			Size: viewport,
 		}
 	}
 	browserCtx, err := browser.NewContext(ctxOpts)
 	if err != nil {
 		return fmt.Errorf("creating context: %w", err)
-	}
-
-	if cfg.Zoom != 1 {
-		if err := browserCtx.AddInitScript(playwright.Script{
-			Content: playwright.String(zoomScript(cfg.Zoom)),
-		}); err != nil {
-			return fmt.Errorf("installing zoom: %w", err)
-		}
 	}
 
 	if cfg.ShowCursor {
@@ -98,6 +96,15 @@ func Run(cfg Config, actions []parser.Command) error {
 	var cuts []encoder.Cut
 	hideAt := -1
 	mouse := &mouseState{}
+
+	var sc *screencaster
+	if !cfg.Preview && cfg.Capture != "record" {
+		sc, err = startScreencast(browserCtx, page, videoDir, start, devW, devH, cfg.CaptureFormat)
+		if err != nil {
+			_ = browserCtx.Close()
+			return fmt.Errorf("starting screencast: %w", err)
+		}
+	}
 
 	for _, cmd := range actions {
 		switch cmd.Type {
@@ -129,14 +136,35 @@ func Run(cfg Config, actions []parser.Command) error {
 		return browserCtx.Close()
 	}
 
-	video := page.Video()
-	if err := browserCtx.Close(); err != nil {
-		return fmt.Errorf("closing context: %w", err)
-	}
-
-	rawPath, err := video.Path()
-	if err != nil {
-		return fmt.Errorf("locating recorded video: %w", err)
+	var rawPath string
+	if sc != nil {
+		frames, totalMs, serr := sc.stop()
+		if serr != nil {
+			_ = browserCtx.Close()
+			return fmt.Errorf("screencast capture: %w", serr)
+		}
+		if err := browserCtx.Close(); err != nil {
+			return fmt.Errorf("closing context: %w", err)
+		}
+		// Drop the blank about:blank frames before the first paint, shifting the
+		// sound and cut timeline to match so nothing desyncs.
+		frames, trim := trimLeadingBlank(frames)
+		totalMs -= trim
+		events = shiftEvents(events, trim)
+		cuts = shiftCuts(cuts, trim)
+		rawPath, err = assembleFrames(frames, totalMs, videoDir)
+		if err != nil {
+			return fmt.Errorf("assembling screencast: %w", err)
+		}
+	} else {
+		video := page.Video()
+		if err := browserCtx.Close(); err != nil {
+			return fmt.Errorf("closing context: %w", err)
+		}
+		rawPath, err = video.Path()
+		if err != nil {
+			return fmt.Errorf("locating recorded video: %w", err)
+		}
 	}
 
 	if !cfg.Sound {
@@ -177,6 +205,41 @@ func loadState(arg string) *playwright.LoadState {
 	default:
 		return nil
 	}
+}
+
+// shiftEvents moves sound events earlier by ms, dropping any that fall before
+// the new start.
+func shiftEvents(events []encoder.SoundEvent, ms int) []encoder.SoundEvent {
+	if ms <= 0 {
+		return events
+	}
+	out := events[:0]
+	for _, e := range events {
+		if e.AtMs -= ms; e.AtMs >= 0 {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// shiftCuts moves Hide/Show cut spans earlier by ms, clamping to zero and
+// dropping any that end before the new start.
+func shiftCuts(cuts []encoder.Cut, ms int) []encoder.Cut {
+	if ms <= 0 {
+		return cuts
+	}
+	out := cuts[:0]
+	for _, c := range cuts {
+		c.StartMs -= ms
+		c.EndMs -= ms
+		if c.StartMs < 0 {
+			c.StartMs = 0
+		}
+		if c.EndMs > 0 {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // elapsedMs returns milliseconds since the recording started.

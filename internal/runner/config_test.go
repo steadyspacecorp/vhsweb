@@ -18,7 +18,11 @@ func TestApplySetNewKeys(t *testing.T) {
 	set("BorderRadius", "24")
 	set("WindowBar", "ColorfulRight")
 	set("Theme", "dark")
+	set("Capture", "record")
 
+	if c.Capture != "record" {
+		t.Errorf("Capture = %q, want record", c.Capture)
+	}
 	if c.ColorScheme != "dark" {
 		t.Errorf("ColorScheme = %q, want dark", c.ColorScheme)
 	}
@@ -44,6 +48,7 @@ func TestApplySetRejects(t *testing.T) {
 		{"Margin", "-5"},
 		{"BorderRadius", "x"},
 		{"Theme", "sepia"},
+		{"Capture", "magic"},
 	} {
 		if err := c.applySet(tc.key, tc.val); err == nil {
 			t.Errorf("Set %s %s: expected error", tc.key, tc.val)

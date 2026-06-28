@@ -261,13 +261,13 @@ func silentArgs(src, dst, ext, fps, chain string) []string {
 	if ext == ".webm" {
 		return []string{
 			"-y", "-i", src, "-r", fps, "-vf", vf,
-			"-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "30",
+			"-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "24",
 			dst,
 		}
 	}
 	return []string{
 		"-y", "-i", src, "-r", fps, "-vf", vf,
-		"-c:v", "libx264", "-preset", "medium",
+		"-c:v", "libx264", "-preset", "slow", "-crf", "18",
 		"-movflags", "+faststart",
 		dst,
 	}
@@ -306,7 +306,7 @@ func encodeWithSound(src, dst, ext, fps, chain string, opts Options, events []So
 	)
 	if ext == ".webm" {
 		args = append(args,
-			"-r", fps, "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "30",
+			"-r", fps, "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "24",
 			"-c:a", "libopus", "-b:a", "128k")
 	} else {
 		args = append(args,

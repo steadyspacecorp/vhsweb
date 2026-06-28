@@ -1,26 +1,5 @@
 package runner
 
-import "fmt"
-
-// zoomScript magnifies the whole page by factor so that a viewport sized to the
-// target output resolution shows content as if it were a smaller logical
-// viewport scaled up. Applied via CSS zoom on the root element, kept in place
-// across DOM changes. Injected as an init script so it survives navigations.
-func zoomScript(factor float64) string {
-	return fmt.Sprintf(`
-(() => {
-  if (window.__vhswebZoomInstalled) return;
-  window.__vhswebZoomInstalled = true;
-  const apply = () => {
-    if (!document.documentElement) { requestAnimationFrame(apply); return; }
-    document.documentElement.style.zoom = '%g';
-  };
-  apply();
-  document.addEventListener('DOMContentLoaded', apply);
-})();
-`, factor)
-}
-
 // cursorScript injects a fake mouse cursor into every page so that pointer
 // movement and clicks are visible in the recorded video. Playwright's real
 // mouse actions dispatch native mousemove/mousedown events, which this overlay

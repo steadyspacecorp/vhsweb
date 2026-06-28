@@ -48,12 +48,20 @@ The pipeline is **parse → run → encode**, one package each under `internal/`
   - `config.go`: `Config` + `DefaultConfig`. `BuildConfig` splits parsed commands
     into recording settings (`Output`, `Set`) vs. ordered action commands. `Set`
     keys are handled in `applySet` (several accept aliases, e.g. `zoom`/`scale`).
-  - `runner.go`: `Run` launches Chromium with video recording on, replays each
-    action via `execute`, then hands the raw WebM to the encoder as an
-    `encoder.Options`. Click/keystroke timestamps are collected into
-    `[]encoder.SoundEvent` relative to page-create time so sounds line up with
-    the video. `Hide`/`Show` are intercepted in the `Run` loop (not `execute`)
-    to record `encoder.Cut` spans by elapsed time.
+  - `runner.go`: `Run` launches Chromium, replays each action via `execute`, then
+    hands the raw video to the encoder as an `encoder.Options`. Click/keystroke
+    timestamps are collected into `[]encoder.SoundEvent` relative to page-create
+    time so sounds line up with the video. `Hide`/`Show` are intercepted in the
+    `Run` loop (not `execute`) to record `encoder.Cut` spans by elapsed time.
+    `Set Zoom` maps to the context's `deviceScaleFactor` (true DPR, crisp via
+    supersampling — not a CSS magnify), so the viewport stays the logical size.
+  - `screencast.go`: the default capture path. `startScreencast` opens a CDP
+    session and `Page.startScreencast` (lossless JPEG q100 frames, no codec
+    artifacts), writing each frame to disk with its arrival time; `assembleFrames`
+    concats them into a lossless intermediate timed by those arrival gaps.
+    `Set Capture record` falls back to Playwright `RecordVideo`. Note: CDP
+    screencast captures at the CSS viewport size, so output is the logical
+    resolution regardless of Zoom.
   - `cursor.go`: JS injected as Playwright **init scripts** (survive navigations)
     — `zoomScript` (CSS `zoom` on `<html>`) and `cursorScript` (fake cursor +
     click ripple overlay reacting to native pointer events).

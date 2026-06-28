@@ -27,6 +27,9 @@ type Config struct {
 	PlaybackSpeed float64 // output playback speed multiplier (1 = realtime)
 	LoopOffset    float64 // GIF only: fraction 0..1 to rotate the loop start by
 
+	Capture       string // "screencast" (lossless CDP frames, default) or "record" (Playwright RecordVideo)
+	CaptureFormat string // screencast frame format: "jpeg" (q100, default) or "png" (lossless)
+
 	Padding      int    // inner mat between page content and the window edge, px
 	Margin       int    // space around the window, px
 	MarginFill   string // color filling the margin / padding / rounded corners
@@ -52,6 +55,8 @@ func DefaultConfig() Config {
 
 		PlaybackSpeed: 1,
 		MarginFill:    "#FFFFFF",
+		Capture:       "screencast",
+		CaptureFormat: "jpeg",
 	}
 }
 
@@ -164,6 +169,22 @@ func (c *Config) applySet(key, value string) error {
 			return fmt.Errorf("Set BorderRadius: want a non-negative integer, got %q", value)
 		}
 		c.BorderRadius = n
+	case "capture":
+		switch strings.ToLower(value) {
+		case "screencast", "record":
+			c.Capture = strings.ToLower(value)
+		default:
+			return fmt.Errorf("Set Capture: want screencast or record, got %q", value)
+		}
+	case "captureformat":
+		switch strings.ToLower(value) {
+		case "png":
+			c.CaptureFormat = "png"
+		case "jpeg", "jpg":
+			c.CaptureFormat = "jpeg"
+		default:
+			return fmt.Errorf("Set CaptureFormat: want png or jpeg, got %q", value)
+		}
 	case "theme", "colorscheme", "darkmode":
 		switch strings.ToLower(value) {
 		case "dark", "light":

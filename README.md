@@ -124,13 +124,15 @@ at the top of the file.
 | `Output <file>` | `Output demo.mp4` | `out.mp4` | Format from extension: mp4 / gif / webm |
 | `Set Width <px>` | `Set Width 1280` | `1280` | Logical viewport width |
 | `Set Height <px>` | `Set Height 720` | `720` | Logical viewport height |
-| `Set Zoom <factor>` | `Set Zoom 2` | `1` | Magnify the page; output is `Width*Zoom x Height*Zoom`, crisp (see below) |
+| `Set Zoom <factor>` | `Set Zoom 2` | `1` | Device pixel ratio. Renders at `Zoom×` and downsamples — crisp, anti-aliased text (see below) |
 | `Set Framerate <fps>` | `Set Framerate 30` | `30` | Output framerate |
 | `Set TypingSpeed <dur>` | `Set TypingSpeed 50ms` | `75ms` | Delay between keystrokes for `Type` |
 | `Set WaitTimeout <dur>` | `Set WaitTimeout 30s` | `15s` | Timeout for navigation / `WaitFor` |
 | `Set Headless <bool>` | `Set Headless false` | `true` | Show the browser window |
 | `Set Cursor <bool>` | `Set Cursor false` | `true` | Overlay a fake mouse cursor in the video |
 | `Set Sound <bool>` | `Set Sound false` | `true` | Mix click / keystroke sound effects into mp4 / webm audio |
+| `Set Capture <mode>` | `Set Capture record` | `screencast` | `screencast` grabs frames straight from the browser (no video-codec artifacts); `record` falls back to Playwright's built-in recorder |
+| `Set CaptureFormat <fmt>` | `Set CaptureFormat png` | `jpeg` | Screencast frame format: `jpeg` (quality 100) or `png` (lossless, smoother gradients, larger) |
 | `Set Theme <scheme>` | `Set Theme dark` | system | Emulate `prefers-color-scheme`: `dark`, `light`, or `system` |
 | `Set PlaybackSpeed <factor>` | `Set PlaybackSpeed 1.5` | `1` | Speed up (`>1`) or slow down (`<1`) the output |
 | `Set LoopOffset <pct>` | `Set LoopOffset 20%` | `0%` | GIF only: rotate the loop start point forward |
@@ -182,15 +184,23 @@ everything to the end.
 
 ### Zoom & crispness
 
-`Set Zoom 2` with `Set Width 1280` / `Set Height 720` produces a crisp
-**2560×1440** video. It works by sizing the browser viewport up to the output
-resolution and magnifying the page content by the zoom factor, so the browser
-rasterizes text and vectors at the final pixel size (sharp, not upscaled).
+`Set Zoom` is the browser's **device pixel ratio**. `Set Zoom 2` renders the
+page at 2× device pixels and downsamples to the logical size, so text and
+vectors are anti-aliased and sharp — like a retina display. Layout is unaffected
+(CSS `@media` breakpoints still see the real `Width`), unlike a magnify trick.
 
-Because this magnifies rather than emulating a true device-pixel-ratio, CSS
-responsive `@media` breakpoints evaluate against the larger pixel width. For
-most app demos that's fine; true-retina DPR would require a different capture
-backend.
+Capture defaults to a **CDP screencast**: individual frames (JPEG quality 100,
+or lossless PNG via `Set CaptureFormat png`) pulled straight from the browser and
+assembled by ffmpeg, so the output is free of the compression artifacts you'd get
+from a normal video codec. Leading blank frames (the `about:blank` before the
+first paint) are trimmed automatically. `Set Capture record` switches back to
+Playwright's built-in recorder if you ever need it.
+
+Note: output resolution is the logical `Width × Height`. The screencast (and
+Playwright's recorder) capture at the CSS viewport size, so `Zoom` buys
+sharpness via supersampling rather than a larger pixel count. True
+higher-than-logical (retina-resolution) export would need a screenshot-based
+capture path — see [Roadmap](#roadmap).
 
 ### Sound
 
@@ -257,9 +267,12 @@ examples/               sample tape files
 
 ## Limitations
 
-- Framerate is resampled by ffmpeg from Playwright's capture rate, not captured
-  frame-exact. For precise framerate control, a CDP screencast backend would be
-  the next step.
+- Output resolution is the logical `Width × Height`; capture happens at the CSS
+  viewport size, so `Set Zoom` improves sharpness (supersampling) but not pixel
+  count. See [Retina-resolution export](#retina-resolution-export).
+- Framerate is resampled by ffmpeg to the target `Set Framerate`. The default
+  screencast capture is frame-timed (each frame carries its real timestamp), so
+  motion timing is accurate even though frames aren't captured at a fixed rate.
 
 ## Roadmap
 
@@ -273,9 +286,11 @@ selector heuristic. Leaning on Playwright's own recorder/codegen — which prefe
 captured tapes far more robust. Capturing hovers, manual navigation, and
 individual keystrokes (as `Type`) would round it out.
 
-### Frame-exact capture (retina DPR)
+### Retina-resolution export
 
-A Chrome DevTools Protocol screencast backend would give frame-exact framerate
-and true device-pixel-ratio capture, replacing today's `Set Zoom` magnify trick
-(which rasterizes crisply but evaluates CSS breakpoints against the larger
-width). See [Limitations](#limitations).
+Capture (both the default CDP screencast and Playwright's recorder) happens at
+the CSS viewport size, so output tops out at the logical `Width × Height` —
+`Set Zoom` adds sharpness by supersampling, not extra pixels. A screenshot-based
+capture path *would* honor `deviceScaleFactor` for true larger-than-logical
+(retina-resolution) export, at the cost of smooth-motion capture. Worth it for
+high-DPI playback or zooming into the result.
