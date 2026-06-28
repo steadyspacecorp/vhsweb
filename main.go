@@ -143,11 +143,12 @@ func cmdRecord(path string, outputs []string, quiet, preview bool) error {
 	}
 	defer r.Close()
 
-	cfg, actions, err := loadTape(r, name, baseDir)
+	cfg, actions, cmds, err := loadTape(r, name, baseDir)
 	if err != nil {
 		return err
 	}
 	cfg.Outputs = outputs
+	cfg.Verbose = !quiet
 
 	if preview {
 		// Watch the run in a real window; record and encode nothing.
@@ -155,6 +156,7 @@ func cmdRecord(path string, outputs []string, quiet, preview bool) error {
 		cfg.Headless = false
 		cfg.Sound = false
 		logf(quiet, "Previewing %s (%dx%d, no recording)\n", name, cfg.Width, cfg.Height)
+		echoSettings(quiet, cmds)
 		return runner.Run(cfg, actions)
 	}
 
@@ -164,11 +166,25 @@ func cmdRecord(path string, outputs []string, quiet, preview bool) error {
 	if len(cfg.Outputs) == 0 {
 		logf(quiet, "Recording %s -> %s (%dx%d)\n", name, cfg.Output, cfg.Width, cfg.Height)
 	}
+	echoSettings(quiet, cmds)
 	if err := runner.Run(cfg, actions); err != nil {
 		return err
 	}
 	logf(quiet, "Done\n")
 	return nil
+}
+
+// echoSettings prints the tape's Output/Set header lines before the run, so the
+// full script is visible (the runner streams the action lines as they execute).
+func echoSettings(quiet bool, cmds []parser.Command) {
+	if quiet {
+		return
+	}
+	for _, c := range cmds {
+		if c.Type == parser.CmdOutput || c.Type == parser.CmdSet {
+			fmt.Println(c.String())
+		}
+	}
 }
 
 // cmdRecordSession drives a real browser and writes a tape from the user's
@@ -218,24 +234,25 @@ func cmdValidate(args []string) error {
 	}
 	defer r.Close()
 
-	if _, _, err := loadTape(r, name, baseDir); err != nil {
+	if _, _, _, err := loadTape(r, name, baseDir); err != nil {
 		return err
 	}
 	fmt.Printf("%s: ok\n", name)
 	return nil
 }
 
-// loadTape parses a tape reader into a runner Config and the ordered actions.
-func loadTape(r io.Reader, name, baseDir string) (runner.Config, []parser.Command, error) {
+// loadTape parses a tape reader into a runner Config, the ordered actions, and
+// the full parsed command list (for echoing the script).
+func loadTape(r io.Reader, name, baseDir string) (runner.Config, []parser.Command, []parser.Command, error) {
 	cmds, err := parser.ParseWithBase(r, baseDir)
 	if err != nil {
-		return runner.Config{}, nil, fmt.Errorf("%s: %w", name, err)
+		return runner.Config{}, nil, nil, fmt.Errorf("%s: %w", name, err)
 	}
 	cfg, actions, err := runner.BuildConfig(cmds)
 	if err != nil {
-		return runner.Config{}, nil, fmt.Errorf("%s: %w", name, err)
+		return runner.Config{}, nil, nil, fmt.Errorf("%s: %w", name, err)
 	}
-	return cfg, actions, nil
+	return cfg, actions, cmds, nil
 }
 
 // logf prints a status line unless quiet is set.

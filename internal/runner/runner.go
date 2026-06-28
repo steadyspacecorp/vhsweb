@@ -107,6 +107,9 @@ func Run(cfg Config, actions []parser.Command) error {
 	}
 
 	for _, cmd := range actions {
+		if cfg.Verbose {
+			fmt.Println(cmd.String())
+		}
 		switch cmd.Type {
 		case parser.CmdHide:
 			if hideAt < 0 {

@@ -80,7 +80,7 @@ Record flags:
 | --- | --- |
 | `-o, --output <file>` | Write to `<file>`, overriding the tape's `Output`. Repeatable — `-o demo.mp4 -o demo.gif` renders both in one run. |
 | `-p, --preview` | Replay the tape in a visible browser, record nothing. |
-| `-q, --quiet` | Suppress status logging. |
+| `-q, --quiet` | Suppress status logging (each tape line is otherwise echoed as it runs). |
 
 A tape can also be piped in: `vhsweb < demo.tape` (or `vhsweb -o demo.gif -`).
 

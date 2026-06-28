@@ -61,6 +61,20 @@ type Command struct {
 	Line int // 1-based source line, for error messages
 }
 
+// String re-serializes a command into its .tape line form, re-quoting any
+// argument that contains whitespace, quotes, or is empty.
+func (c Command) String() string {
+	out := string(c.Type)
+	for _, a := range c.Args {
+		if a == "" || strings.ContainsAny(a, " \t\"'") {
+			out += " " + fmt.Sprintf("%q", a)
+		} else {
+			out += " " + a
+		}
+	}
+	return out
+}
+
 // Parse reads a .tape script and returns the ordered list of commands. Any
 // Source includes are resolved relative to the current working directory.
 func Parse(r io.Reader) ([]Command, error) {

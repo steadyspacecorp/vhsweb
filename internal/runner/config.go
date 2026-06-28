@@ -23,6 +23,7 @@ type Config struct {
 	ShowCursor  bool          // overlay a fake mouse cursor in the video
 	Sound       bool          // mix click/keystroke sound effects into the audio track
 	Preview     bool          // watch the run in a real window; skip recording/encoding
+	Verbose     bool          // echo each action line to stdout as it runs
 
 	PlaybackSpeed float64 // output playback speed multiplier (1 = realtime)
 	LoopOffset    float64 // GIF only: fraction 0..1 to rotate the loop start by
