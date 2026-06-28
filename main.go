@@ -149,6 +149,7 @@ func cmdRecord(path string, outputs []string, quiet, preview bool) error {
 	}
 	cfg.Outputs = outputs
 	cfg.Verbose = !quiet
+	cfg.Color = cfg.Verbose && colorEnabled()
 
 	if preview {
 		// Watch the run in a real window; record and encode nothing.
@@ -156,7 +157,7 @@ func cmdRecord(path string, outputs []string, quiet, preview bool) error {
 		cfg.Headless = false
 		cfg.Sound = false
 		logf(quiet, "Previewing %s (%dx%d, no recording)\n", name, cfg.Width, cfg.Height)
-		echoSettings(quiet, cmds)
+		echoSettings(cfg, cmds)
 		return runner.Run(cfg, actions)
 	}
 
@@ -166,7 +167,7 @@ func cmdRecord(path string, outputs []string, quiet, preview bool) error {
 	if len(cfg.Outputs) == 0 {
 		logf(quiet, "Recording %s -> %s (%dx%d)\n", name, cfg.Output, cfg.Width, cfg.Height)
 	}
-	echoSettings(quiet, cmds)
+	echoSettings(cfg, cmds)
 	if err := runner.Run(cfg, actions); err != nil {
 		return err
 	}
@@ -176,15 +177,29 @@ func cmdRecord(path string, outputs []string, quiet, preview bool) error {
 
 // echoSettings prints the tape's Output/Set header lines before the run, so the
 // full script is visible (the runner streams the action lines as they execute).
-func echoSettings(quiet bool, cmds []parser.Command) {
-	if quiet {
+func echoSettings(cfg runner.Config, cmds []parser.Command) {
+	if !cfg.Verbose {
 		return
 	}
 	for _, c := range cmds {
 		if c.Type == parser.CmdOutput || c.Type == parser.CmdSet {
-			fmt.Println(c.String())
+			fmt.Println(runner.Colorize(c, cfg.Color))
 		}
 	}
+}
+
+// colorEnabled reports whether stdout is a terminal that should receive ANSI
+// color. It honors the NO_COLOR convention and disables color when output is
+// piped or redirected.
+func colorEnabled() bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
 }
 
 // cmdRecordSession drives a real browser and writes a tape from the user's
