@@ -28,9 +28,11 @@ const cursorScript = `
       // reached by clicking a link) never shows the cursor parked top-left.
       transform: 'translate(' + cx + 'px, ' + cy + 'px)',
     });
+    // Size via inline style, not width/height attributes — a page CSS rule for
+    // svg elements would otherwise override the attributes.
     cursor.innerHTML =
-      '<svg width="32" height="32" viewBox="0 0 20 20" fill="none" ' +
-      'xmlns="http://www.w3.org/2000/svg">' +
+      '<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" ' +
+      'style="display:block;width:32px;height:32px">' +
       '<path d="M2 2 L2 16 L6 12 L9 18 L11 17 L8 11 L13 11 Z" ' +
       'fill="black" stroke="white" stroke-width="1.2"/></svg>';
     document.body.appendChild(cursor);
